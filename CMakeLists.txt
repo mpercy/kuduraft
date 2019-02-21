@@ -28,6 +28,7 @@
 # 1. http://llvm.org/releases/3.9.0/docs/ReleaseNotes.html
 cmake_minimum_required(VERSION 3.4.3)
 
+set(ENV{NO_REBUILD_THIRDPARTY} 1)
 # Prevent builds from the top-level source directory. This ensures that build
 # output is well isolated from the source tree.
 #
@@ -142,7 +143,7 @@ set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -Wno-sign-compare")
 set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -Wno-comment")
 #  -Wno-deprecated: we currently have a number of places using deprecated functions
 #     (mostly our own functions). TODO(todd) remove or individually suppress call sites.
-set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -Wno-deprecated")
+set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -Wno-deprecated -Wno-deprecated-declarations")
 #  -pthread: enable multithreaded malloc
 set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -pthread")
 #  -fno-strict-aliasing
@@ -630,6 +631,7 @@ function(ADD_EXPORTABLE_LIBRARY LIB_NAME)
   if(ARG_NONLINK_DEPS)
     add_dependencies(${LIB_NAME} ${ARG_NONLINK_DEPS})
   endif()
+  # install(TARGETS ${LIB_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 
   # Now start setting up the exported variant.
   set(EXPORTED_LIB_NAME ${LIB_NAME}_exported)
@@ -996,7 +998,7 @@ find_package(GLog REQUIRED)
 include_directories(SYSTEM ${GLOG_INCLUDE_DIR})
 set(GLOG_DEPS)
 if (NOT APPLE)
-  set(GLOG_DEPS unwind)
+  set(GLOG_DEPS unwind coredumper)
 endif()
 ADD_THIRDPARTY_LIB(glog
   STATIC_LIB "${GLOG_STATIC_LIB}"
@@ -1031,6 +1033,7 @@ ADD_THIRDPARTY_LIB(gmock
   STATIC_LIB ${GMOCK_STATIC_LIBRARY}
   SHARED_LIB ${GMOCK_SHARED_LIBRARY})
 
+set(PROTOBUF_PROTOC_EXECUTABLE /home/engshare/third-party2/protobuf3/3.6.1/gcc-5-glibc-2.23/cec9acd/bin/protoc)
 ## Protobuf
 find_package(Protobuf REQUIRED)
 include_directories(SYSTEM ${PROTOBUF_INCLUDE_DIR})
@@ -1044,11 +1047,11 @@ ADD_THIRDPARTY_LIB(protoc
 find_package(KRPC REQUIRED)
 
 ## Thrift
-find_package(Thrift REQUIRED)
-include_directories(SYSTEM ${THRIFT_INCLUDE_DIR})
-ADD_THIRDPARTY_LIB(thrift
-  STATIC_LIB "${THRIFT_STATIC_LIBRARY}"
-  SHARED_LIB "${THRIFT_SHARED_LIBRARY}")
+#find_package(Thrift REQUIRED)
+#include_directories(SYSTEM ${THRIFT_INCLUDE_DIR})
+#ADD_THIRDPARTY_LIB(thrift
+#  STATIC_LIB "${THRIFT_STATIC_LIBRARY}"
+#  SHARED_LIB "${THRIFT_SHARED_LIBRARY}")
 
 #ifdef FB_DO_NOT_REMOVE
 # The mini-HMS relies on JAVA_HOME being set in order to run the HMS, and
@@ -1078,9 +1081,9 @@ include_directories(SYSTEM ${LZ4_INCLUDE_DIR})
 ADD_THIRDPARTY_LIB(lz4 STATIC_LIB "${LZ4_STATIC_LIB}")
 
 ## Bitshuffle
-find_package(Bitshuffle REQUIRED)
-include_directories(SYSTEM ${BITSHUFFLE_INCLUDE_DIR})
-ADD_THIRDPARTY_LIB(bitshuffle STATIC_LIB "${BITSHUFFLE_STATIC_LIB}")
+#find_package(Bitshuffle REQUIRED)
+#include_directories(SYSTEM ${BITSHUFFLE_INCLUDE_DIR})
+#ADD_THIRDPARTY_LIB(bitshuffle STATIC_LIB "${BITSHUFFLE_STATIC_LIB}")
 
 ## ZLib
 find_package(Zlib REQUIRED)
@@ -1142,6 +1145,7 @@ if (NOT "${KUDU_USE_ASAN}" AND
     NOT "${KUDU_USE_TSAN}" AND
     NOT ("${KUDU_BUGGY_GOLD}" AND "${KUDU_LINK}" STREQUAL "d"))
   find_package(GPerf REQUIRED)
+  include_directories(SYSTEM ${GOOGLE_PERFTOOLS_INCLUDE_DIR})
   ADD_THIRDPARTY_LIB(tcmalloc
     STATIC_LIB "${TCMALLOC_STATIC_LIB}"
     SHARED_LIB "${TCMALLOC_SHARED_LIB}")
@@ -1153,25 +1157,25 @@ if (NOT "${KUDU_USE_ASAN}" AND
   set(KUDU_TCMALLOC_AVAILABLE 1)
 endif()
 
-# Required pmem libraries
-if (NOT APPLE)
-find_package(Pmem REQUIRED)
-include_directories(${PMEM_INCLUDE_DIR})
-ADD_THIRDPARTY_LIB(vmem
-  STATIC_LIB "${VMEM_STATIC_LIB}"
-  SHARED_LIB "${VMEM_SHARED_LIB}")
-ADD_THIRDPARTY_LIB(pmem
-  STATIC_LIB "${PMEM_STATIC_LIB}"
-  SHARED_LIB "${PMEM_SHARED_LIB}")
-ADD_THIRDPARTY_LIB(pmemobj
-  STATIC_LIB "${PMEMOBJ_STATIC_LIB}"
-  SHARED_LIB "${PMEMOBJ_SHARED_LIB}")
-endif()
-
-if (EXISTS ${VMEM_SHARED_LIB})
-  set(HAVE_LIB_VMEM 1)
-  add_definitions(-DHAVE_LIB_VMEM=1)
-endif()
+## Required pmem libraries
+#if (NOT APPLE)
+#find_package(Pmem REQUIRED)
+#include_directories(${PMEM_INCLUDE_DIR})
+#ADD_THIRDPARTY_LIB(vmem
+#  STATIC_LIB "${VMEM_STATIC_LIB}"
+#  SHARED_LIB "${VMEM_SHARED_LIB}")
+#ADD_THIRDPARTY_LIB(pmem
+#  STATIC_LIB "${PMEM_STATIC_LIB}"
+#  SHARED_LIB "${PMEM_SHARED_LIB}")
+#ADD_THIRDPARTY_LIB(pmemobj
+#  STATIC_LIB "${PMEMOBJ_STATIC_LIB}"
+#  SHARED_LIB "${PMEMOBJ_SHARED_LIB}")
+#endif()
+#
+#if (EXISTS ${VMEM_SHARED_LIB})
+#  set(HAVE_LIB_VMEM 1)
+#  add_definitions(-DHAVE_LIB_VMEM=1)
+#endif()
 
 ## curl
 ##find_package(CURL REQUIRED)
@@ -1183,14 +1187,15 @@ ADD_THIRDPARTY_LIB(crcutil
   STATIC_LIB "${CRCUTIL_STATIC_LIB}"
   SHARED_LIB "${CRCUTIL_SHARED_LIB}")
 
-## breakpad
-if (NOT APPLE)
-  find_package(BreakpadClient REQUIRED)
-  include_directories(SYSTEM ${BREAKPAD_CLIENT_INCLUDE_DIR})
-  ADD_THIRDPARTY_LIB(breakpad_client
-    STATIC_LIB "${BREAKPAD_CLIENT_STATIC_LIB}"
-    SHARED_LIB "${BREAKPAD_CLIENT_SHARED_LIB}")
-endif()
+find_package(Coredumper REQUIRED)
+include_directories(SYSTEM ${COREDUMPER_INCLUDE_DIR})
+ADD_THIRDPARTY_LIB(coredumper
+  STATIC_LIB "${COREDUMPER_STATIC_LIB}"
+  SHARED_LIB "${COREDUMPER_SHARED_LIB}")
+
+## rapidjson
+#find_package(Rapidjson REQUIRED)
+#include_directories(SYSTEM ${RAPIDJSON_INCLUDE_DIR}/..)
 
 ## llvm
 # Note that llvm has a unique cmake setup. See kudu/codegen/CMakeLists.txt
@@ -1290,7 +1295,7 @@ endif()
 # Linker setup
 ############################################################
 
-set(KUDU_MIN_TEST_LIBS ${KUDU_BASE_LIBS} kudu_test_main kudu_test_util)
+set(KUDU_MIN_TEST_LIBS ${KUDU_BASE_LIBS} kudu_test_main kudu_test_util libgtest.a)
 # Prepend SANITIZER_OPTIONS_OVERRIDE if this is a sanitizer build.
 # SANITIZER_OPTIONS_OVERRIDE needs to be linked first so that it is statically
 # linked to the test binaries directly. Otherwise the weakly linked default
@@ -1489,3 +1494,15 @@ add_subdirectory(src/kudu/security)
 #add_subdirectory(src/kudu/tools)
 #add_subdirectory(src/kudu/tserver)
 add_subdirectory(src/kudu/util)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/kudu" # source directory
+        DESTINATION "include" # target directory
+        FILES_MATCHING # install only matched files
+        PATTERN "*.h" # select header files
+)
+
+install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/" # source directory
+        DESTINATION "lib" # target directory
+        FILES_MATCHING # install only matched files
+        PATTERN "*.a" # select header files
+)
