@@ -165,3 +165,39 @@ ADD_KUDU_TEST(consensus_peers-test)
 # googletest). Remove this when we upgrade.
 #set_source_files_properties(raft_consensus-test.cc
 #    PROPERTIES COMPILE_FLAGS -Wno-inconsistent-missing-override)
+
+# To reduce complexity for end applications, we want to
+# combine all .a's of kuduraft into a single kudu_combined.a
+set(C_LIB ${CMAKE_BINARY_DIR}/lib/libkudu_combined.a)
+add_custom_command(TARGET consensus
+    POST_BUILD
+    COMMAND touch touch_link
+    COMMAND ar -t $<TARGET_FILE:consensus> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:log> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:clock> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:kudu_util> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:kudu_common> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:kudu_fs> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:kudu_util_compression> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:security> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:krpc> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:krb5_realm_override> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:kudu_common_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:maintenance_manager_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:wire_protocol_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:util_compression_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:fs_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:consensus_metadata_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:consensus_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:rpc_header_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:histogram_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:version_info_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:log_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:rpc_introspection_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:token_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:pb_util_proto> >> touch_link
+    COMMAND ar -t $<TARGET_FILE:gutil> >> touch_link
+    COMMAND cat touch_link | xargs ar -qcs ${C_LIB}
+    COMMAND ranlib ${C_LIB}
+    DEPENDS tcmalloc profiler consensus log kudu_fs kudu_common kudu_util clock kudu_util_compression kudu_common_proto maintenance_manager_proto util_compression_proto fs_proto log_proto consensus_metadata_proto consensus_proto histogram_proto rpc_header_proto rpc_introspection_proto token_proto pb_util_proto
+)

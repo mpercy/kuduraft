@@ -347,8 +347,8 @@ if (${KUDU_USE_XRAY})
 endif()
 
 # For any C code, use the same flags.
-set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_C_FLAGS "$ENV{CFLAGS} ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "$ENV{CXXFLAGS} ${CMAKE_CXX_FLAGS} -std=c++11")
 
 # Enable the Clang undefined behavior (UB) sanitizer.
 if (${KUDU_USE_UBSAN})
@@ -1033,7 +1033,6 @@ ADD_THIRDPARTY_LIB(gmock
   STATIC_LIB ${GMOCK_STATIC_LIBRARY}
   SHARED_LIB ${GMOCK_SHARED_LIBRARY})
 
-set(PROTOBUF_PROTOC_EXECUTABLE /home/engshare/third-party2/protobuf3/3.6.1/gcc-5-glibc-2.23/cec9acd/bin/protoc)
 ## Protobuf
 find_package(Protobuf REQUIRED)
 include_directories(SYSTEM ${PROTOBUF_INCLUDE_DIR})
@@ -1137,12 +1136,15 @@ include_directories(${KERBEROS_INCLUDE_DIR})
 ADD_THIRDPARTY_LIB(krb5
   SHARED_LIB "${KERBEROS_LIBRARY}")
 
+#[[ We are removing TCMALLOC so as to not collide with
+    fbcode gperftools library
 ## Google PerfTools
 ##
 ## Disabled with TSAN/ASAN as well as with gold+dynamic linking (see
 ## earlier comment).
 if (NOT "${KUDU_USE_ASAN}" AND
     NOT "${KUDU_USE_TSAN}" AND
+    NOT "${KUDU_DISABLE_TCMALLOC}" AND
     NOT ("${KUDU_BUGGY_GOLD}" AND "${KUDU_LINK}" STREQUAL "d"))
   find_package(GPerf REQUIRED)
   include_directories(SYSTEM ${GOOGLE_PERFTOOLS_INCLUDE_DIR})
@@ -1156,6 +1158,7 @@ if (NOT "${KUDU_USE_ASAN}" AND
   add_definitions("-DTCMALLOC_ENABLED")
   set(KUDU_TCMALLOC_AVAILABLE 1)
 endif()
+]]
 
 ## Required pmem libraries
 #if (NOT APPLE)
@@ -1501,8 +1504,20 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/kudu" # source directory
         PATTERN "*.h" # select header files
 )
 
+install(DIRECTORY "${CMAKE_BINARY_DIR}/src/kudu" # source directory
+        DESTINATION "include" # target directory
+        FILES_MATCHING # install only matched files
+        PATTERN "*.h" # select header files
+)
+
+install(DIRECTORY "${THIRDPARTY_INSTALL_COMMON_DIR}/include/rapidjson" # source directory
+        DESTINATION "include" # target directory
+        FILES_MATCHING # install only matched files
+        PATTERN "*.h" # select header files
+)
+
 install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/" # source directory
         DESTINATION "lib" # target directory
         FILES_MATCHING # install only matched files
-        PATTERN "*.a" # select header files
+        PATTERN "*.a" # select archive libraries
 )
