@@ -91,6 +91,7 @@ set(BUILD_SUPPORT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build-support)
 set(THIRDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 set(THIRDPARTY_INSTALL_DIR ${THIRDPARTY_DIR}/installed)
 set(THIRDPARTY_INSTALL_COMMON_DIR ${THIRDPARTY_INSTALL_DIR}/common)
+set(THIRDPARTY_PREINSTALL_COMMON_DIR ${THIRDPARTY_DIR}/preinstalled/common)
 set(THIRDPARTY_INSTALL_UNINSTRUMENTED_DIR ${THIRDPARTY_INSTALL_DIR}/uninstrumented)
 set(THIRDPARTY_INSTALL_TSAN_DIR ${THIRDPARTY_INSTALL_DIR}/tsan)
 
@@ -1199,6 +1200,7 @@ ADD_THIRDPARTY_LIB(coredumper
 ## rapidjson
 #find_package(Rapidjson REQUIRED)
 #include_directories(SYSTEM ${RAPIDJSON_INCLUDE_DIR}/..)
+include_directories(SYSTEM ${THIRDPARTY_PREINSTALL_COMMON_DIR}/include)
 
 ## llvm
 # Note that llvm has a unique cmake setup. See kudu/codegen/CMakeLists.txt
@@ -1485,17 +1487,17 @@ add_subdirectory(src/kudu/fs)
 add_subdirectory(src/kudu/gutil)
 #add_subdirectory(src/kudu/hms)
 #add_subdirectory(src/kudu/integration-tests)
-#add_subdirectory(src/kudu/kserver)
+add_subdirectory(src/kudu/kserver)
 #add_subdirectory(src/kudu/master)
 #add_subdirectory(src/kudu/mini-cluster)
 add_subdirectory(src/kudu/rpc)
 add_subdirectory(src/kudu/security)
 #add_subdirectory(src/kudu/sentry)
-#add_subdirectory(src/kudu/server)
+add_subdirectory(src/kudu/server)
 #add_subdirectory(src/kudu/tablet)
 #add_subdirectory(src/kudu/thrift)
 #add_subdirectory(src/kudu/tools)
-#add_subdirectory(src/kudu/tserver)
+add_subdirectory(src/kudu/tserver)
 add_subdirectory(src/kudu/util)
 
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/kudu" # source directory
@@ -1510,7 +1512,7 @@ install(DIRECTORY "${CMAKE_BINARY_DIR}/src/kudu" # source directory
         PATTERN "*.h" # select header files
 )
 
-install(DIRECTORY "${THIRDPARTY_INSTALL_COMMON_DIR}/include/rapidjson" # source directory
+install(DIRECTORY "${THIRDPARTY_PREINSTALL_COMMON_DIR}/include/rapidjson" # source directory
         DESTINATION "include" # target directory
         FILES_MATCHING # install only matched files
         PATTERN "*.h" # select header files

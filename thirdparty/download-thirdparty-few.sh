@@ -167,20 +167,20 @@ fetch_and_patch() {
 mkdir -p $TP_SOURCE_DIR
 cd $TP_SOURCE_DIR
 
-GPERFTOOLS_PATCHLEVEL=2
-fetch_and_patch \
- gperftools-${GPERFTOOLS_VERSION}.tar.gz \
- $GPERFTOOLS_SOURCE \
- $GPERFTOOLS_PATCHLEVEL \
- "patch -p1 < $TP_DIR/patches/gperftools-Replace-namespace-base-with-namespace-tcmalloc.patch" \
- "patch -p1 < $TP_DIR/patches/gperftools-unbreak-memz.patch" \
- "autoreconf -fvi"
+#GPERFTOOLS_PATCHLEVEL=2
+#fetch_and_patch \
+# gperftools-${GPERFTOOLS_VERSION}.tar.gz \
+# $GPERFTOOLS_SOURCE \
+# $GPERFTOOLS_PATCHLEVEL \
+# "patch -p1 < $TP_DIR/patches/gperftools-Replace-namespace-base-with-namespace-tcmalloc.patch" \
+# "patch -p1 < $TP_DIR/patches/gperftools-unbreak-memz.patch" \
+# "autoreconf -fvi"
 
-RAPIDJSON_PATCHLEVEL=0
-fetch_and_patch \
- rapidjson-${RAPIDJSON_VERSION}.zip \
- $RAPIDJSON_SOURCE \
- $RAPIDJSON_PATCHLEVEL
+#RAPIDJSON_PATCHLEVEL=0
+#fetch_and_patch \
+# rapidjson-${RAPIDJSON_VERSION}.zip \
+# $RAPIDJSON_SOURCE \
+# $RAPIDJSON_PATCHLEVEL
 
 echo "---------------"
 echo "Thirdparty dependencies downloaded successfully"
