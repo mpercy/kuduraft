@@ -55,7 +55,9 @@
 #ifdef FB_DO_NOT_REMOVE
 #include "kudu/security/security_flags.h"
 #include "kudu/server/default_path_handlers.h"
+#endif
 #include "kudu/server/diagnostics_log.h"
+#ifdef FB_DO_NOT_REMOVE
 #include "kudu/server/generic_service.h"
 #endif
 #include "kudu/server/glog_metrics.h"
@@ -126,7 +128,6 @@ DEFINE_string(user_acl, "*",
 TAG_FLAG(user_acl, stable);
 TAG_FLAG(user_acl, sensitive);
 
-#ifdef FB_DO_NOT_REMOVE
 DEFINE_string(principal, "kudu/_HOST",
               "Kerberos principal that this daemon will log in as. The special token "
               "_HOST will be replaced with the FQDN of the local host.");
@@ -206,7 +207,6 @@ DEFINE_string(rpc_private_key_password_cmd, "", "A Unix command whose output "
 TAG_FLAG(rpc_certificate_file, experimental);
 TAG_FLAG(rpc_private_key_file, experimental);
 TAG_FLAG(rpc_ca_certificate_file, experimental);
-#endif
 
 DEFINE_int32(rpc_default_keepalive_time_ms, 65000,
              "If an RPC connection from a client is idle for this amount of time, the server "
@@ -444,9 +444,7 @@ Status ServerBase::Init() {
   // if we're having clock problems.
   RETURN_NOT_OK_PREPEND(clock_->Init(), "Cannot initialize clock");
 
-#ifdef FB_DO_NOT_REMOVE
   RETURN_NOT_OK(security::InitKerberosForServer(FLAGS_principal, FLAGS_keytab_file));
-#endif
 
   fs::FsReport report;
   Status s = fs_manager_->Open(&report);
@@ -469,8 +467,6 @@ Status ServerBase::Init() {
   RETURN_NOT_OK(report.LogAndCheckForFatalErrors());
 
   RETURN_NOT_OK(InitAcls());
-#ifdef FB_DO_NOT_REMOVE
-#endif
 
   // Create the Messenger.
   rpc::MessengerBuilder builder(name_);
@@ -481,8 +477,6 @@ Status ServerBase::Init() {
          .set_metric_entity(metric_entity())
          .set_connection_keep_alive_time(FLAGS_rpc_default_keepalive_time_ms)
          .set_rpc_negotiation_timeout_ms(FLAGS_rpc_negotiation_timeout_ms)
-         ;
-#ifdef FB_DO_NOT_REMOVE
          .set_rpc_authentication(FLAGS_rpc_authentication)
          .set_rpc_encryption(FLAGS_rpc_encryption)
          .set_rpc_tls_ciphers(FLAGS_rpc_tls_ciphers)
@@ -492,7 +486,6 @@ Status ServerBase::Init() {
          .set_epki_private_password_key_cmd(FLAGS_rpc_private_key_password_cmd)
          .set_keytab_file(FLAGS_keytab_file)
          .enable_inbound_tls();
-#endif
 
   if (options_.rpc_opts.rpc_reuseport) {
     builder.set_reuseport();
@@ -506,14 +499,10 @@ Status ServerBase::Init() {
   RETURN_NOT_OK(rpc_server_->Bind());
   clock_->RegisterMetrics(metric_entity_);
 
-#ifdef FB_DO_NOT_REMOVE
   RETURN_NOT_OK_PREPEND(StartMetricsLogging(), "Could not enable metrics logging");
-#endif
 
   result_tracker_->StartGCThread();
-#ifdef FB_DO_NOT_REMOVE
   RETURN_NOT_OK(StartExcessLogFileDeleterThread());
-#endif
 
   return Status::OK();
 }
@@ -552,8 +541,6 @@ Status ServerBase::InitAcls() {
 
   return Status::OK();
 }
-#ifdef FB_DO_NOT_REMOVE
-#endif
 
 
 Status ServerBase::GetStatusPB(ServerStatusPB* status) const {
@@ -650,7 +637,6 @@ Status ServerBase::RegisterService(gscoped_ptr<rpc::ServiceIf> rpc_impl) {
   return rpc_server_->RegisterService(std::move(rpc_impl));
 }
 
-#ifdef FB_DO_NOT_REMOVE
 Status ServerBase::StartMetricsLogging() {
   if (options_.metrics_log_interval_ms <= 0) {
     return Status::OK();
@@ -666,7 +652,6 @@ Status ServerBase::StartMetricsLogging() {
   return Status::OK();
 }
 
-
 Status ServerBase::StartExcessLogFileDeleterThread() {
   // Try synchronously deleting excess log files once at startup to make sure it
   // works, then start a background thread to continue deleting them in the
@@ -675,8 +660,10 @@ Status ServerBase::StartExcessLogFileDeleterThread() {
     RETURN_NOT_OK_PREPEND(DeleteExcessLogFiles(options_.env),
                           "Unable to delete excess log files");
   }
+  #ifdef FB_DO_NOT_REMOVE
   RETURN_NOT_OK_PREPEND(minidump_handler_->DeleteExcessMinidumpFiles(options_.env),
                         "Unable to delete excess minidump files");
+  #endif
   return Thread::Create("server", "excess-log-deleter", &ServerBase::ExcessLogFileDeleterThread,
                         this, &excess_log_deleter_thread_);
 }
@@ -686,10 +673,14 @@ void ServerBase::ExcessLogFileDeleterThread() {
   const MonoDelta kWait = MonoDelta::FromSeconds(60);
   while (!stop_background_threads_latch_.WaitUntil(MonoTime::Now() + kWait)) {
     WARN_NOT_OK(DeleteExcessLogFiles(options_.env), "Unable to delete excess log files");
+    #ifdef FB_DO_NOT_REMOVE
     WARN_NOT_OK(minidump_handler_->DeleteExcessMinidumpFiles(options_.env),
                 "Unable to delete excess minidump files");
+    #endif
   }
 }
+
+#ifdef FB_DO_NOT_REMOVE
 
 std::string ServerBase::FooterHtml() const {
   return Substitute("<pre>$0\nserver uuid $1</pre>",
@@ -747,7 +738,6 @@ void ServerBase::Shutdown() {
 
   // Next, shut down remaining server components.
   stop_background_threads_latch_.CountDown();
-#ifdef FB_DO_NOT_REMOVE
   if (diag_log_) {
     diag_log_->Stop();
   }
@@ -755,7 +745,6 @@ void ServerBase::Shutdown() {
   if (excess_log_deleter_thread_) {
     excess_log_deleter_thread_->Join();
   }
-#endif
 }
 
 void ServerBase::UnregisterAllServices() {
@@ -763,7 +752,6 @@ void ServerBase::UnregisterAllServices() {
 }
 
 void ServerBase::ServiceQueueOverflowed(rpc::ServicePool* service) {
-#ifdef FB_DO_NOT_REMOVE
   if (!diag_log_) return;
 
   // Logging all of the stacks is relatively heavy-weight, so if we are in a persistent
@@ -776,6 +764,7 @@ void ServerBase::ServiceQueueOverflowed(rpc::ServicePool* service) {
     return;
   }
 
+#ifdef FB_DO_NOT_REMOVE
   diag_log_->DumpStacksNow(Substitute("service queue overflowed for $0",
                                       service->service_name()));
 #endif
