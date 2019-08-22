@@ -34,6 +34,7 @@
 #include <gflags/gflags.h>
 
 #include "kudu/common/wire_protocol.h"
+#include "kudu/consensus/opid.pb.h"
 #include "kudu/consensus/log_index.h"
 #include "kudu/consensus/log_metrics.h"
 #include "kudu/consensus/log_reader.h"
@@ -454,15 +455,21 @@ Status Log::Open(const LogOptions &options,
   RETURN_NOT_OK(env_util::CreateDirIfMissing(
       fs_manager->env(), tablet_wal_path));
 
-  scoped_refptr<Log> new_log(new Log(options,
-                                     fs_manager,
-                                     tablet_wal_path,
-                                     tablet_id,
+  scoped_refptr<Log> new_log;
+  if (options.log_factory) {
+    RETURN_NOT_OK(options.log_factory->createLog(options,
+        fs_manager, tablet_wal_path,
+        tablet_id, metric_entity, &new_log));
+  } else {
+    new_log = new Log(options, fs_manager,
+                     tablet_wal_path,
+                     tablet_id,
 #ifdef FB_DO_NOT_REMOVE
-                                     schema,
-                                     schema_version,
+                     schema,
+                     schema_version,
 #endif
-                                     metric_entity));
+                     metric_entity);
+  }
   RETURN_NOT_OK(new_log->Init());
   log->swap(new_log);
   return Status::OK();
@@ -497,6 +504,16 @@ Log::Log(LogOptions options, FsManager* fs_manager, string log_path,
   if (metric_entity_) {
     metrics_.reset(new LogMetrics(metric_entity_));
   }
+}
+
+Status LogFactory::createLog(LogOptions options,
+    FsManager* fs_manager, std::string log_path,
+    std::string tablet_id,
+    scoped_refptr<MetricEntity> metric_entity,
+    scoped_refptr<Log> *new_log) {
+  *new_log = new Log(options, fs_manager, log_path,
+      tablet_id, metric_entity);
+  return Status::OK();
 }
 
 Status Log::Init() {
@@ -953,6 +970,19 @@ void Log::SetSchemaForNextLogSegment(const Schema& schema,
   schema_version_ = version;
 }
 #endif
+
+Status Log::ReadReplicatesInRange(
+    int64_t starting_at,
+    int64_t up_to,
+    int64_t max_bytes_to_read,
+    std::vector<consensus::ReplicateMsg*>* replicates) const {
+  return reader()->ReadReplicatesInRange(
+      starting_at, up_to, max_bytes_to_read, replicates);
+}
+
+Status Log::LookupOpId(int64_t op_index, OpId* op_id) const {
+  return reader()->LookupOpId(op_index, op_id);
+}
 
 Status Log::Close() {
   allocation_pool_->Shutdown();
