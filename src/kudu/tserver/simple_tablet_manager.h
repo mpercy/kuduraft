@@ -60,6 +60,7 @@ class Log;
 namespace consensus {
 class ConsensusMetadataManager;
 class OpId;
+struct ElectionResult;
 } // namespace consensus
 
 namespace tserver {

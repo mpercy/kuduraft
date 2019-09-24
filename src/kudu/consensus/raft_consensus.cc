@@ -1162,7 +1162,6 @@ Status RaftConsensus::HandleLeaderRequestTermUnlocked(const ConsensusRequestPB* 
     if (request->caller_term() < CurrentTermUnlocked()) {
       string msg = Substitute("Rejecting Update request from peer $0 for earlier term $1. "
                               "Current term is $2. Ops: $3",
-
                               request->caller_uuid(),
                               request->caller_term(),
                               CurrentTermUnlocked(),
@@ -2219,6 +2218,9 @@ Status RaftConsensus::StartConsensusOnlyRoundUnlocked(const ReplicateRefPtr& msg
   CHECK(IsConsensusOnlyOperation(op_type))
       << "Expected a consensus-only op type, got " << OperationType_Name(op_type)
       << ": " << SecureShortDebugString(*msg->get());
+  if (op_type == NO_OP) {
+    ScheduleNoOpReceivedCallback(msg);
+  }
   VLOG_WITH_PREFIX_UNLOCKED(1) << "Starting consensus round: "
                                << SecureShortDebugString(msg->get()->id());
   scoped_refptr<ConsensusRound> round(new ConsensusRound(this, msg));
@@ -2382,6 +2384,11 @@ RaftPeerPB::Role RaftConsensus::role() const {
 int64_t RaftConsensus::CurrentTerm() const {
   LockGuard l(lock_);
   return CurrentTermUnlocked();
+}
+
+string RaftConsensus::GetLeaderUuid() const {
+  LockGuard l(lock_);
+  return GetLeaderUuidUnlocked();
 }
 
 void RaftConsensus::SetStateUnlocked(State new_state) {
@@ -2559,7 +2566,7 @@ void RaftConsensus::ElectionCallback(ElectionReason reason, const ElectionResult
   // The election callback runs on a reactor thread, so we need to defer to our
   // threadpool. If the threadpool is already shut down for some reason, it's OK --
   // we're OK with the callback never running.
-  WARN_NOT_OK(raft_pool_token_->SubmitFunc(std::bind(&RaftConsensus::DoElectionCallback,
+  WARN_NOT_OK(raft_pool_token_->SubmitFunc(std::bind(&RaftConsensus::NestedElectionDecisionCallback,
                                                      shared_from_this(),
                                                      reason,
                                                      result)),
@@ -2675,6 +2682,14 @@ void RaftConsensus::DoElectionCallback(ElectionReason reason, const ElectionResu
     // It races with the above state check.
     // This could be a problem during tablet deletion.
     CHECK_OK(BecomeLeaderUnlocked());
+  }
+}
+
+void RaftConsensus::NestedElectionDecisionCallback(
+    ElectionReason reason, const ElectionResult& result) {
+  DoElectionCallback(reason, result);
+  if (!result.vote_request.is_pre_election() && edcb_) {
+    edcb_(result);
   }
 }
 
@@ -3025,6 +3040,33 @@ Status RaftConsensus::SetCommittedConfigUnlocked(const RaftConfigPB& config_to_c
   return Status::OK();
 }
 
+void RaftConsensus::ScheduleTermAdvancementCallback(int64_t new_term) {
+  WARN_NOT_OK(
+      raft_pool_token_->SubmitFunc(
+        std::bind(&RaftConsensus::DoTermAdvancmentCallback,
+                  shared_from_this(),
+                  new_term)),
+      LogPrefixThreadSafe() + "Unable to run term advancement callback");
+}
+
+void RaftConsensus::DoTermAdvancmentCallback(int64_t new_term) {
+  // Simply execute the registered callback for term advancement.
+  if (tacb_) tacb_(new_term);
+}
+
+void RaftConsensus::ScheduleNoOpReceivedCallback(const ReplicateRefPtr& msg) {
+  WARN_NOT_OK(
+      raft_pool_token_->SubmitFunc(
+        std::bind(&RaftConsensus::DoNoOpReceivedCallback,
+                  shared_from_this(),
+                  msg->get()->id())),
+      LogPrefixThreadSafe() + "Unable to run term advancement callback");
+}
+
+void RaftConsensus::DoNoOpReceivedCallback(const OpId id) {
+  if (norcb_) norcb_(id);
+}
+
 Status RaftConsensus::SetCurrentTermUnlocked(int64_t new_term,
                                             FlushToDisk flush) {
   TRACE_EVENT1("consensus", "RaftConsensus::SetCurrentTermUnlocked",
@@ -3040,7 +3082,12 @@ Status RaftConsensus::SetCurrentTermUnlocked(int64_t new_term,
   if (flush == FLUSH_TO_DISK) {
     CHECK_OK(cmeta_->Flush());
   }
+
   ClearLeaderUnlocked();
+
+  // Trigger term advancement callback
+  ScheduleTermAdvancementCallback(new_term);
+
   return Status::OK();
 }
 
@@ -3135,6 +3182,21 @@ ConsensusMetadata* RaftConsensus::consensus_metadata_for_tests() const {
 int64_t RaftConsensus::GetMillisSinceLastLeaderHeartbeat() const {
     return last_leader_communication_time_micros_ == 0 ?
         0 : (GetMonoTimeMicros() - last_leader_communication_time_micros_) / 1000;
+}
+
+void RaftConsensus::SetElectionDecisionCallback(ElectionDecisionCallback edcb) {
+  CHECK(edcb);
+  edcb_ = std::move(edcb);
+}
+
+void RaftConsensus::SetTermAdvancementCallback(TermAdvancementCallback tacb) {
+  CHECK(tacb);
+  tacb_ = std::move(tacb);
+}
+
+void RaftConsensus::SetNoOpReceivedCallback(NoOpReceivedCallback norcb) {
+  CHECK(norcb);
+  norcb_ = std::move(norcb);
 }
 
 ////////////////////////////////////////////////////////////////////////

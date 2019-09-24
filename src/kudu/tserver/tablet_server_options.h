@@ -29,6 +29,8 @@ class LogFactory;
 }
 namespace consensus {
 class ConsensusRoundHandler;
+class OpId;
+struct ElectionResult;
 }
 
 namespace tserver {
@@ -47,6 +49,10 @@ struct TabletServerOptions : public kudu::server::ServerBaseOptions {
   std::shared_ptr<kudu::log::LogFactory> log_factory;
 
   kudu::consensus::ConsensusRoundHandler *round_handler = nullptr;
+
+  std::function<void(const consensus::ElectionResult&)> edcb;
+  std::function<void(int64_t)> tacb;
+  std::function<void(const consensus::OpId id)> norcb;
 
   bool IsDistributed() const;
 };
