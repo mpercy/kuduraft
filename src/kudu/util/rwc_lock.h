@@ -128,7 +128,7 @@ class RWCLock {
   int reader_count_;
   bool write_locked_;
 
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   static const int kBacktraceBufSize = 1024;
   int64_t writer_tid_;
   int64_t last_writelock_acquire_time_;

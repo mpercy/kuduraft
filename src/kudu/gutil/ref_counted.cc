@@ -15,14 +15,14 @@ namespace subtle {
 
 RefCountedBase::RefCountedBase()
     : ref_count_(0)
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
     , in_dtor_(false)
 #endif
     {
 }
 
 RefCountedBase::~RefCountedBase() {
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   DCHECK(in_dtor_) << "RefCounted object deleted without calling Release()";
 #endif
 }
@@ -31,7 +31,7 @@ void RefCountedBase::AddRef() const {
   // TODO(maruel): Add back once it doesn't assert 500 times/sec.
   // Current thread books the critical section "AddRelease" without release it.
   // DFAKE_SCOPED_LOCK_THREAD_LOCKED(add_release_);
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   DCHECK(!in_dtor_);
 #endif
   ++ref_count_;
@@ -41,11 +41,11 @@ bool RefCountedBase::Release() const {
   // TODO(maruel): Add back once it doesn't assert 500 times/sec.
   // Current thread books the critical section "AddRelease" without release it.
   // DFAKE_SCOPED_LOCK_THREAD_LOCKED(add_release_);
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   DCHECK(!in_dtor_);
 #endif
   if (--ref_count_ == 0) {
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
     in_dtor_ = true;
 #endif
     return true;
@@ -59,32 +59,32 @@ bool RefCountedThreadSafeBase::HasOneRef() const {
 }
 
 RefCountedThreadSafeBase::RefCountedThreadSafeBase() : ref_count_(0) {
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   in_dtor_ = false;
 #endif
 }
 
 RefCountedThreadSafeBase::~RefCountedThreadSafeBase() {
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   DCHECK(in_dtor_) << "RefCountedThreadSafe object deleted without "
                       "calling Release()";
 #endif
 }
 
 void RefCountedThreadSafeBase::AddRef() const {
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   DCHECK(!in_dtor_);
 #endif
   base::RefCountInc(&ref_count_);
 }
 
 bool RefCountedThreadSafeBase::Release() const {
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   DCHECK(!in_dtor_);
   DCHECK(!base::RefCountIsZero(&ref_count_));
 #endif
   if (!base::RefCountDec(&ref_count_)) {
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
     in_dtor_ = true;
 #endif
     return true;

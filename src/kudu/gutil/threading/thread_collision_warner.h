@@ -101,7 +101,7 @@
 // };
 
 
-#if !defined(NDEBUG)
+#if !defined(NDEBUG_DISABLED_FB)
 
 // Defines a class member that acts like a mutex. It is used only as a
 // verification tool.
