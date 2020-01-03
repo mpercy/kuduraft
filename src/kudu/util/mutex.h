@@ -50,7 +50,7 @@ class Mutex {
   void unlock() { Release(); }
   bool try_lock() { return TryAcquire(); }
 
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   void AssertAcquired() const;
 #else
   void AssertAcquired() const {}
@@ -61,7 +61,7 @@ class Mutex {
 
   pthread_mutex_t native_handle_;
 
-#ifndef NDEBUG
+#ifndef NDEBUG_DISABLED_FB
   // Members and routines taking care of locks assertions.
   void CheckHeldAndUnmark();
   void CheckUnheldAndMark();
