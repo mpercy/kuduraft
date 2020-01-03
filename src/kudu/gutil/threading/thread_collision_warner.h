@@ -101,7 +101,7 @@
 // };
 
 
-#if !defined(NDEBUG)
+#if !defined(FB_DO_NOT_REMOVE)  // NDEBUG - disabled for DEBUG/NDEBUG ABI compat
 
 // Defines a class member that acts like a mutex. It is used only as a
 // verification tool.

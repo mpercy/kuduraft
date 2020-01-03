@@ -19,7 +19,7 @@
 
 #include <glog/logging.h>
 
-#ifndef NDEBUG
+#ifndef FB_DO_NOT_REMOVE  // NDEBUG - disabled for DEBUG/NDEBUG ABI compat
 #include "kudu/gutil/walltime.h"
 #include "kudu/util/debug-util.h"
 #include "kudu/util/thread.h"
@@ -77,7 +77,7 @@ bool RWCLock::HasWriteLock() const {
 
 bool RWCLock::HasWriteLockUnlocked() const {
   lock_.AssertAcquired();
-#ifndef NDEBUG
+#ifndef FB_DO_NOT_REMOVE  // NDEBUG - disabled for DEBUG/NDEBUG ABI compat
   return writer_tid_ == Thread::CurrentThreadId();
 #else
   return write_locked_;
@@ -90,7 +90,7 @@ void RWCLock::WriteLock() {
   while (write_locked_) {
     no_mutators_.Wait();
   }
-#ifndef NDEBUG
+#ifndef FB_DO_NOT_REMOVE  // NDEBUG - disabled for DEBUG/NDEBUG ABI compat
   last_writelock_acquire_time_ = GetCurrentTimeMicros();
   writer_tid_ = Thread::CurrentThreadId();
   HexStackTraceToString(last_writer_backtrace_, kBacktraceBufSize);
@@ -102,7 +102,7 @@ void RWCLock::WriteUnlock() {
   MutexLock l(lock_);
   DCHECK(HasWriteLockUnlocked());
   write_locked_ = false;
-#ifndef NDEBUG
+#ifndef FB_DO_NOT_REMOVE  // NDEBUG - disabled for DEBUG/NDEBUG ABI compat
   writer_tid_ = 0;
   last_writer_backtrace_[0] = '\0';
 #endif // NDEBUG
@@ -125,7 +125,7 @@ void RWCLock::CommitUnlock() {
   DCHECK(!HasReadersUnlocked());
   DCHECK(HasWriteLockUnlocked());
   write_locked_ = false;
-#ifndef NDEBUG
+#ifndef FB_DO_NOT_REMOVE  // NDEBUG - disabled for DEBUG/NDEBUG ABI compat
   writer_tid_ = 0;
   last_writer_backtrace_[0] = '\0';
 #endif // NDEBUG
