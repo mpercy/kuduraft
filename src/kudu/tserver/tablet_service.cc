@@ -1289,6 +1289,13 @@ void ConsensusServiceImpl::UpdateConsensus(const ConsensusRequestPB* req,
   // Submit the update directly to the TabletReplica's RaftConsensus instance.
   shared_ptr<RaftConsensus> consensus;
   if (!GetConsensusOrRespond(replica, resp, context, &consensus)) return;
+
+  // Fast path for proxy requests.
+  if (consensus->IsProxyRequest(req)) {
+    consensus->HandleProxyRequest(req, resp, context);
+    return;
+  }
+
   Status s = consensus->Update(req, resp);
   if (PREDICT_FALSE(!s.ok())) {
     // Clear the response first, since a partially-filled response could

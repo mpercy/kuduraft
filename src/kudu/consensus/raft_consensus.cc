@@ -3205,6 +3205,27 @@ int64_t RaftConsensus::GetMillisSinceLastLeaderHeartbeat() const {
         0 : (GetMonoTimeMicros() - last_leader_communication_time_micros_) / 1000;
 }
 
+bool RaftConsensus::IsProxyRequest(const ConsensusRequestPB* request) const {
+  // We expect proxy_uuid to reflect the uuid of the local node if it's a proxy
+  // request, or to be empty otherwise.
+  return !request->proxy_uuid().empty();
+}
+
+void RaftConsensus::HandleProxyRequest(const ConsensusRequestPB* request,
+                                       ConsensusResponsePB* response,
+                                       rpc::RpcContext* context) {
+  // Initial implementation:
+  //
+  // Synchronously:
+  // 1. Validate that the request addressed to the local node via 'proxy_uuid/.
+  // 2. Reconstitute each message from the local cache.
+  // 3. Clear proxy_uuid from the request.
+  //
+  // Asynchronously:
+  // 4. Deliver the reconstituted request directly to the remote (async).
+  // 5. Proxy the response from the remote back to the caller.
+}
+
 ////////////////////////////////////////////////////////////////////////
 // ConsensusBootstrapInfo
 ////////////////////////////////////////////////////////////////////////

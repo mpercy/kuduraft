@@ -340,6 +340,10 @@ message ConsensusRequestPB {
   // UUID of server this request is addressed to.
   optional bytes dest_uuid = 7;
 
+  // UUID of server intended to proxy this request.
+  // Only set if this request is intended to be proxied.
+  optional bytes proxy_uuid = 12;
+
   required string tablet_id = 1;
 
   // The uuid of the peer making the call.
