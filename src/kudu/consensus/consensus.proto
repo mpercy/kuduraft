@@ -342,12 +342,16 @@ message ConsensusRequestPB {
 
   // UUID of server intended to proxy this request.
   // Only set if this request is intended to be proxied.
-  optional bytes proxy_uuid = 12;
+  optional bytes proxy_dest_uuid = 12;
 
   required string tablet_id = 1;
 
   // The uuid of the peer making the call.
   required bytes caller_uuid = 2;
+
+  // UUID of server proxying this request.
+  // Only set if this request was proxied on behalf of the leader.
+  optional bytes proxy_caller_uuid = 13;
 
   // The caller's term. As only leaders can send messages,
   // replicas will accept all messages as long as the term

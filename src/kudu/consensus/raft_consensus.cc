@@ -28,6 +28,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include <boost/optional/optional.hpp>
 #include <gflags/gflags.h>
@@ -58,6 +59,7 @@
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/gutil/walltime.h"
 #include "kudu/rpc/periodic.h"
+#include "kudu/rpc/rpc_context.h"
 #include "kudu/util/async_util.h"
 #include "kudu/util/debug/trace_event.h"
 #include "kudu/util/flag_tags.h"
@@ -134,6 +136,7 @@ TAG_FLAG(raft_prepare_replacement_before_eviction, advanced);
 TAG_FLAG(raft_prepare_replacement_before_eviction, experimental);
 
 DECLARE_int32(memory_limit_warn_threshold_percentage);
+DECLARE_int32(consensus_max_batch_size_bytes); // defined in consensus_queue (expose as method?)
 
 // Metrics
 // ---------
@@ -173,6 +176,7 @@ using std::shared_ptr;
 using std::string;
 using std::unique_ptr;
 using std::unordered_set;
+using std::vector;
 using std::weak_ptr;
 using strings::Substitute;
 
@@ -3208,7 +3212,7 @@ int64_t RaftConsensus::GetMillisSinceLastLeaderHeartbeat() const {
 bool RaftConsensus::IsProxyRequest(const ConsensusRequestPB* request) const {
   // We expect proxy_uuid to reflect the uuid of the local node if it's a proxy
   // request, or to be empty otherwise.
-  return !request->proxy_uuid().empty();
+  return !request->proxy_dest_uuid().empty();
 }
 
 void RaftConsensus::HandleProxyRequest(const ConsensusRequestPB* request,
@@ -3217,13 +3221,92 @@ void RaftConsensus::HandleProxyRequest(const ConsensusRequestPB* request,
   // Initial implementation:
   //
   // Synchronously:
-  // 1. Validate that the request addressed to the local node via 'proxy_uuid/.
+  // 1. Validate that the request is addressed to the local node via 'proxy_dest_uuid'.
   // 2. Reconstitute each message from the local cache.
-  // 3. Clear proxy_uuid from the request.
   //
   // Asynchronously:
   // 4. Deliver the reconstituted request directly to the remote (async).
   // 5. Proxy the response from the remote back to the caller.
+
+  // Validate the request.
+  if (request->proxy_dest_uuid() != peer_uuid()) {
+    // TODO(mpercy): Use the same error type as the usual "bad destination" error.
+    context->RespondFailure(Status::InvalidArgument("Bad proxy dest?"));
+  }
+  // TODO(mpercy): Should we validate that everyone involved is in the active config?
+
+  // Reconstitute from local cache.
+  // We assume and enforce that a single request is composed of a range of ops.
+  int num_ops = 0;
+  int64_t first_op_index = -1;
+
+  // TODO(mpercy): Return errors instead of crashing below.
+  int64_t max_batch_size = FLAGS_consensus_max_batch_size_bytes - request->ByteSizeLong();
+  for (int i = 0; i < request->ops_size(); i++) {
+    auto& msg = request->ops(i);
+    CHECK_EQ(PROXY_OP, msg.op_type());
+    if (num_ops == 0) {
+      first_op_index = msg.id().index();
+    } else {
+      CHECK_EQ(first_op_index + num_ops, msg.id().index());
+    }
+    num_ops++;
+  }
+  // Now we know that all ops we are reconstituting are consecutive.
+  OpId preceding_id;
+  vector<ReplicateRefPtr> messages;
+  // TODO(mpercy): Add an API for ReadOps() to take number of ops we want,
+  // instead of the max batch size.
+  if (num_ops > 0) {
+    // TODO(mpercy): Return an error on failure instead of a CHECK!
+    CHECK_OK(queue_->log_cache()->ReadOps(first_op_index - 1,
+                                          max_batch_size,
+                                          &messages,
+                                          &preceding_id));
+  }
+
+  // Construct the downstream request; copy the relevant fields from the
+  // proxied request.
+  ConsensusRequestPB downstream_request;
+  downstream_request.set_dest_uuid(request->dest_uuid());
+  downstream_request.set_tablet_id(request->tablet_id());
+  downstream_request.set_caller_uuid(request->caller_uuid());
+  downstream_request.set_caller_term(request->caller_term());
+
+  if (request->has_preceding_id()) {
+    *downstream_request.mutable_preceding_id() = request->preceding_id();
+  }
+  if (request->has_committed_index()) {
+    downstream_request.set_committed_index(request->committed_index());
+  }
+  if (request->has_all_replicated_index()) {
+    downstream_request.set_all_replicated_index(request->all_replicated_index());
+  }
+  if (request->has_safe_timestamp()) {
+    downstream_request.set_safe_timestamp(request->safe_timestamp());
+  }
+  if (request->has_last_idx_appended_to_leader()) {
+    downstream_request.set_last_idx_appended_to_leader(request->last_idx_appended_to_leader());
+  }
+
+  downstream_request.set_proxy_caller_uuid(peer_uuid());
+
+  // Reconstitute the proxied ops.
+  for (int i = 0; i < request->ops_size(); i++) {
+    // Ensure that the OpIds match.
+    // TODO(mpercy): Return an error instead of a CHECK!
+    CHECK(OpIdEquals(request->ops(i).id(), messages[i]->get()->id()));
+    downstream_request.mutable_ops()->AddAllocated(messages[i]->get());
+  }
+
+  // Asynchronously:
+  // Send the request to the remote.
+  //
+  // Find the address of the remote given our local config.
+  const auto& dest_uuid = request->dest_uuid();
+  //GetPeerAddr(dest_uuid);
+
+  context->RespondSuccess();
 }
 
 ////////////////////////////////////////////////////////////////////////
