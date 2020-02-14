@@ -3218,6 +3218,15 @@ bool RaftConsensus::IsProxyRequest(const ConsensusRequestPB* request) const {
 void RaftConsensus::HandleProxyRequest(const ConsensusRequestPB* request,
                                        ConsensusResponsePB* response,
                                        rpc::RpcContext* context) {
+  RaftConfigPB active_config;
+  {
+    // Snapshot the active Raft config so we know how to route proxied messages.
+    ThreadRestrictions::AssertWaitAllowed();
+    LockGuard l(lock_);
+    CHECK_OK(CheckRunningUnlocked()); // TODO(mpercy): Error instead of CHECK
+    active_config = cmeta_->ActiveConfig();
+  }
+
   // Initial implementation:
   //
   // Synchronously:
@@ -3253,6 +3262,12 @@ void RaftConsensus::HandleProxyRequest(const ConsensusRequestPB* request,
     num_ops++;
   }
   // Now we know that all ops we are reconstituting are consecutive.
+
+  // TODO(mpercy): Check whether we have the event in our LogCache yet. If not,
+  // wait and retry, or subscribe to the event being available. Most likely we
+  // should try be simple / greedy and wait until we have all events in the
+  // cache? Or we could be aggressive and fill what we can?
+
   OpId preceding_id;
   vector<ReplicateRefPtr> messages;
   // TODO(mpercy): Add an API for ReadOps() to take number of ops we want,
@@ -3304,7 +3319,22 @@ void RaftConsensus::HandleProxyRequest(const ConsensusRequestPB* request,
   //
   // Find the address of the remote given our local config.
   const auto& dest_uuid = request->dest_uuid();
-  //GetPeerAddr(dest_uuid);
+  RaftPeerPB* peer_pb;
+  CHECK_OK(GetRaftConfigMember(&active_config, dest_uuid, &peer_pb)); // TODO(mpercy): Remove CHECK
+  CHECK(peer_pb->has_last_known_addr()) << "no known addr for peer"; // TODO(mpercy): Remove CHECK
+
+  // Create a consensus proxy
+  gscoped_ptr<PeerProxy> peer_proxy;
+  CHECK_OK(peer_proxy_factory_->NewProxy(*peer_pb, &peer_proxy));
+
+  // TODO(mpercy): Make the proxy
+  ConsensusResponsePB downstream_response;
+  rpc::RpcController controller;
+  rpc::ResponseCallback callback = [](){};
+  peer_proxy->UpdateAsync(downstream_request, &downstream_response, &controller, callback);
+
+  // TODO(mpercy): The above is async, now we have to respond async and chain
+  // the async events.
 
   context->RespondSuccess();
 }
